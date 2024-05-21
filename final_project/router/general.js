@@ -3,6 +3,7 @@ let books = require("./booksdb.js");
 let isValid = require("./auth_users.js").isValid;
 let users = require("./auth_users.js").users;
 const public_users = express.Router();
+const axios = require('axios');
 
 
 public_users.post("/register", (req, res) => {
@@ -20,57 +21,103 @@ public_users.post("/register", (req, res) => {
   return res.status(404).json({message: "Unable to register user."});
 });
 
+async function getBooksAsync() {
+    try {
+        const response = await axios.get('http://localhost:5000/books');
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching books:', error);
+        throw error;
+    }
+}
+
 // Get the book list available in the shop
-public_users.get('/', function (req, res) {
-    return res.status(200).send(JSON.stringify(books, null, 4));
+public_users.get('/', async function (req, res) {
+    try {
+        const books = await getBooksAsync();
+        return res.status(200).send(JSON.stringify(books, null, 4));
+    } catch (error) {
+        return res.status(500).send({ message: 'Error fetching books' });
+    }
 });
 
 // Get book details based on ISBN
+function getBookByIsbnPromise(isbn) {
+    return axios.get(`http://localhost:5000/books/${isbn}`)
+        .then(response => {
+            return response.data;
+        })
+        .catch(error => {
+            console.error(`Error fetching book with ISBN ${isbn}:`, error);
+            throw error;
+        });
+}
+
+// Endpoint to get book details by ISBN using Promise callbacks
 public_users.get('/isbn/:isbn', function (req, res) {
     const isbn = req.params.isbn;
-    const book = books[isbn];
-
-    if (book) {
-        return res.status(200).json(book);
-    } else {
-        return res.status(404).send(`Book not found with ISBN ${isbn}`);
-    }
+    getBookByIsbnPromise(isbn)
+        .then(book => {
+            return res.status(200).json(book);
+        })
+        .catch(error => {
+            return res.status(404).send(`Book not found with ISBN ${isbn}`);
+        });
 });
 
 // Get book details based on author
-public_users.get('/author/:author', function (req, res) {
-    const author = req.params.author.toLowerCase();
-    const filtered_books = {};
-
-    for (const key in books) {
-        if (books[key].author.toLowerCase() === author)
-            filtered_books[key] = books[key];
+async function getBooksByAuthorAsync(author) {
+    try {
+        const response = await axios.get(`http://localhost:5000/books/author/${author}`); // Change port to 5000
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching books by author ${author}:`, error);
+        throw error;
     }
+}
 
-    if (Object.keys(filtered_books).length > 0) {
-        return res.status(200).send(filtered_books);
-    } else {
-        return res.status(404).send(`No books found by author ${req.params.author}`);
+// Endpoint to get books by author using async-await
+public_users.get('/author/:author', async function (req, res) {
+    const author = req.params.author.toLowerCase();
+    try {
+        const filteredBooks = await getBooksByAuthorAsync(author);
+        if (Object.keys(filteredBooks).length > 0) {
+            return res.status(200).send(filteredBooks);
+        } else {
+            return res.status(404).send(`No books found by author ${req.params.author}`);
+        }
+    } catch (error) {
+        return res.status(500).send({ message: 'Error fetching books' });
     }
 });
 
 
 // Get all books based on title
-public_users.get('/title/:title', function (req, res) {
-    const title = req.params.title.toLowerCase();
-    const filtered_books = {};
-
-    for (const key in books) {
-        if (books[key].title.toLowerCase() === title)
-            filtered_books[key] = books[key];
+async function getBooksByTitleAsync(title) {
+    try {
+        const response = await axios.get(`http://localhost:5000/books/title/${title}`); // Change port to 5000
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching books by title ${title}:`, error);
+        throw error;
     }
+}
 
-    if (Object.keys(filtered_books).length > 0) {
-        return res.status(200).send(filtered_books);
-    } else {
-        return res.status(404).send(`No books found by title ${req.params.title}`);
+// Endpoint to get books by title using async-await
+public_users.get('/title/:title', async function (req, res) {
+    const title = req.params.title.toLowerCase();
+    try {
+        const filteredBooks = await getBooksByTitleAsync(title);
+        if (Object.keys(filteredBooks).length > 0) {
+            return res.status(200).send(filteredBooks);
+        } else {
+            return res.status(404).send(`No books found by title ${req.params.title}`);
+        }
+    } catch (error) {
+        return res.status(500).send({ message: 'Error fetching books' });
     }
 });
+
 
 //  Get book review
 public_users.get('/review/:isbn', function (req, res) {
